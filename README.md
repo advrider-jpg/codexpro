@@ -24,15 +24,18 @@
   ·
   <a href="DOMAIN_SETUP.md">Stable URL guide</a>
   ·
-  <a href="LAUNCH_COPY.md">Launch copy</a>
+  <a href="FAQ.md">FAQ</a>
   ·
   <a href="SECURITY.md">Security</a>
 </p>
 
-CodexPro turns ChatGPT Developer Mode into a local coding agent for the folder on your machine. Run one command in a repo, paste the copied Server URL into ChatGPT Create App, and ChatGPT can inspect files, edit code, run safe verification commands, and load the same explicit context you normally give Codex through `AGENTS.md`, `.ai-bridge`, git status, git diff, and source files.
+CodexPro turns ChatGPT Developer Mode into a local coding agent for the folder on your machine. Install it globally, run setup in a repo, paste the copied Server URL into ChatGPT Create App, and ChatGPT can inspect files, edit code, run safe verification commands, and load the same explicit context you normally give Codex through `AGENTS.md`, `.ai-bridge`, git status, git diff, and source files.
+
+The practical hook: Codex and ChatGPT are different product surfaces with separate usage policies. When Codex is constrained, CodexPro lets you keep coding from ChatGPT if your ChatGPT plan still has available capacity.
 
 ```bash
-npx codexpro@latest start
+npm install -g codexpro
+codexpro setup
 ```
 
 ## Why
@@ -63,18 +66,30 @@ What it gives you:
 Normal coding mode  ChatGPT reads, writes, edits, searches, and verifies directly.
 Handoff mode        ChatGPT writes .ai-bridge/current-plan.md for Codex to execute.
 Pro planning mode   Export a durable context bundle for sessions that cannot call MCP tools.
-Stable URLs         Use a reserved ngrok domain or Cloudflare named tunnel so the ChatGPT app URL stays fixed.
+Stable URLs         Use an ngrok free dev domain or Cloudflare named tunnel so the ChatGPT app URL stays fixed.
 ```
 
 If your ChatGPT account exposes a stronger model in the web app, including any GPT-5.5-class model available to your account, CodexPro lets that model work against your local repo through MCP. CodexPro does not provide or unlock that model; it gives the ChatGPT session local coding tools and repo context.
 
 CodexPro is not an OS sandbox. It is a local developer bridge with safety defaults. Read [SECURITY.md](SECURITY.md) before exposing it through a tunnel.
 
+## Requirements
+
+```text
+Node.js 20+
+ChatGPT Plus or Pro account with Apps / Developer Mode access
+Developer mode enabled from Settings -> Apps -> Advanced settings
+Enforce CSP in developer mode kept enabled
+One public tunnel option: Cloudflare quick tunnel, ngrok free dev domain, or Cloudflare named tunnel
+```
+
+Current testing shows free / Go ChatGPT accounts do not expose the app flow needed for CodexPro. Use Plus or Pro for the best experience.
+
 ## Status
 
 CodexPro is a public open-source MCP bridge with conservative defaults: workspace-only writes, safe bash by default, blocked secret paths, token-protected public URLs, and compact visual cards for high-signal code changes.
 
-CodexPro does not bypass, increase, or modify ChatGPT, Codex, or OpenAI rate limits. It gives you another workflow surface: ChatGPT can do MCP-backed agentic coding in your local repo, while Codex remains available for terminal execution, review, or handoff workflows. Model/tool availability and quota behavior are controlled by the product you connect it to.
+CodexPro does not bypass, increase, or modify ChatGPT, Codex, or OpenAI rate limits. It gives you another workflow surface: ChatGPT can do MCP-backed agentic coding in your local repo, while Codex remains available for terminal execution, review, or handoff workflows. Because the surfaces have separate usage policies, you can often keep moving in ChatGPT when a Codex workflow is blocked by its own limits. Model/tool availability and quota behavior are controlled by the product you connect it to.
 
 ## Tools exposed to ChatGPT
 
@@ -148,17 +163,28 @@ After upgrading or changing widget metadata, open the CodexPro app settings in C
 
 ## Install
 
-One-off run with npm:
-
-```bash
-npx codexpro@latest start --root /absolute/path/to/your/repo
-```
-
-Global install:
+Recommended install:
 
 ```bash
 npm install -g codexpro
-codexpro start --root /absolute/path/to/your/repo
+```
+
+First run from the repo you want ChatGPT to work on:
+
+```bash
+codexpro setup
+```
+
+Daily start after setup:
+
+```bash
+codexpro start
+```
+
+No-install fallback:
+
+```bash
+npx codexpro@latest start --root /absolute/path/to/your/repo
 ```
 
 From source:
@@ -174,17 +200,18 @@ npm run build
 From the project folder you want ChatGPT to work on:
 
 ```bash
-npx codexpro@latest start
+codexpro setup
 ```
 
-That is the intended low-friction path. It:
+That is the intended low-friction first-run path. It:
 
 ```text
 - uses the current folder as the workspace root
+- asks for the local port, mode, tunnel provider, and stable URL choice
+- saves the workspace profile for future codexpro start runs
 - starts the local HTTP MCP server
 - generates a private CodexPro token
-- asks for a tunnel choice on first run if this workspace has no saved settings
-- supports Cloudflare quick tunnel, reserved ngrok domain, Cloudflare stable tunnel, or local-only mode
+- supports Cloudflare quick tunnel, ngrok free dev domain, Cloudflare stable tunnel, or local-only mode
 - installs cloudflared into ~/.codexpro/bin if Cloudflare is selected and it is missing
 - waits for the public HTTPS tunnel URL
 - copies the exact ChatGPT Server URL to your clipboard
@@ -194,21 +221,26 @@ That is the intended low-friction path. It:
 - lets you press `o` to open a local setup/status page
 ```
 
+After setup, daily use from the same repo is:
+
+```bash
+codexpro start
+```
+
 ## ChatGPT app setup
 
-Before you paste the CodexPro URL, enable ChatGPT apps for your account:
+Before you paste the CodexPro URL, turn on Developer Mode in ChatGPT:
 
 ```text
-ChatGPT profile menu
--> Settings
+ChatGPT Settings
 -> Apps
 -> Advanced settings
--> turn on Developer mode
--> turn on Enforce CSP in developer mode
+-> Developer mode: on
+-> Enforce CSP in developer mode: on
 -> Create app
 ```
 
-Keep CSP enabled. CodexPro widgets declare a strict CSP and do not need unrestricted network access.
+This is a one-time ChatGPT setting. Keep CSP enabled; CodexPro widgets are built for that path.
 
 In Create App, use:
 
@@ -227,7 +259,7 @@ Keep the terminal running while ChatGPT uses the connector. When you stop it, th
 If `cloudflared` is missing, CodexPro downloads the official Cloudflare binary into `~/.codexpro/bin` on supported macOS, Windows, and Linux machines. No sudo, admin shell, Homebrew, apt, or winget step is required. To skip that behavior:
 
 ```bash
-npx codexpro@latest start --no-install-cloudflared
+codexpro start --no-install-cloudflared
 ```
 
 OS behavior:
@@ -243,11 +275,15 @@ Linux clipboard copy requires one of `wl-copy`, `xclip`, or `xsel`. If none is i
 First-run tunnel choice:
 
 ```text
-cloudflare  Cloudflare quick tunnel. Easiest demo path, new URL each run.
-ngrok       Reserved ngrok domain. Stable URL after ngrok auth/domain setup.
-stable      Cloudflare named tunnel. Stable URL with your Cloudflare domain.
+cloudflare  Cloudflare quick tunnel. Easiest demo path, new URL each restart.
+ngrok       ngrok free dev domain. Recommended stable URL for most users.
+stable      Cloudflare named tunnel. Stable URL with your own Cloudflare domain.
 local       No public tunnel. Only for local MCP clients.
 ```
+
+If you use quick mode, the Server URL changes every time the tunnel restarts. That means you must update the ChatGPT app Server URL each time. Use quick mode for demos, not daily work.
+
+Recommended daily path: create a free ngrok account, use the dev domain assigned to your account, save it in `codexpro setup`, and keep the same ChatGPT app Server URL across restarts.
 
 CodexPro saves the selected tunnel provider, hostname, port, mode, and auth token for that workspace. Future launches from the same folder reuse it:
 
@@ -331,7 +367,7 @@ Workspace settings:
 codexpro settings
 codexpro settings show
 codexpro settings list
-codexpro settings set --tunnel ngrok --hostname your-domain.ngrok-free.app
+codexpro settings set --tunnel ngrok --hostname your-domain.ngrok-free.dev
 codexpro settings use --from-root /path/to/another/repo
 codexpro settings set --tunnel cloudflare
 codexpro settings delete --yes
@@ -359,7 +395,7 @@ codexpro setup                 # guided onboarding for new users
 codexpro start --mode handoff  # planning-only .ai-bridge handoff
 codexpro start --mode pro      # export context for models without MCP tools
 codexpro stable --hostname codexpro.example.com --tunnel-name codexpro
-codexpro ngrok --hostname your-domain.ngrok-free.app
+codexpro ngrok --hostname your-domain.ngrok-free.dev
 ```
 
 ## Easiest run mode
@@ -558,7 +594,7 @@ Quick tunnels are good for demos, but the `trycloudflare.com` URL changes whenev
 CodexPro needs `cloudflared` for public HTTPS tunnels. The launcher first uses `cloudflared` from PATH, then `~/.codexpro/bin`, then downloads the official Cloudflare release into `~/.codexpro/bin` when it is missing.
 
 ```bash
-npx codexpro@latest start
+codexpro start
 ```
 
 To force a fresh local install:
@@ -587,13 +623,15 @@ Other platforms can still work by installing `cloudflared` manually and passing 
 
 ### Stable URL mode
 
-For daily use, use a Cloudflare named tunnel, a Cloudflare dashboard-managed tunnel token, or a reserved ngrok domain. This gives you one stable ChatGPT connector URL, for example:
+For daily use, use ngrok's free dev domain, a Cloudflare named tunnel, or a Cloudflare dashboard-managed tunnel token. This gives you one stable ChatGPT connector URL, for example:
 
 ```text
 https://codexpro.example.com/mcp?codexpro_token=<your-codexpro-token>
 ```
 
 There is one unavoidable boundary: a permanent public URL needs a tunnel provider such as Cloudflare or ngrok and a hostname reserved with that provider. CodexPro can run the tunnel after that setup, but a quick tunnel cannot be made permanent.
+
+If you use quick mode, you will need to edit the ChatGPT app every restart because the copied Server URL changes.
 
 One-time Cloudflare CLI setup with your own domain:
 
@@ -649,12 +687,12 @@ If you already installed ngrok and authenticated it:
 ngrok config add-authtoken <your-ngrok-token>
 ```
 
-Reserve a static domain in the ngrok dashboard, then start CodexPro with:
+Create a free ngrok account, find your assigned dev domain in the ngrok dashboard under Universal Gateway -> Domains, then start CodexPro with:
 
 ```bash
 codexpro ngrok \
   --root /absolute/path/to/your/repo \
-  --hostname your-domain.ngrok-free.app \
+  --hostname your-domain.ngrok-free.dev \
   --token keep-this-codexpro-token-stable
 ```
 
@@ -664,20 +702,20 @@ Equivalent explicit form:
 codexpro start \
   --root /absolute/path/to/your/repo \
   --tunnel ngrok \
-  --hostname your-domain.ngrok-free.app \
+  --hostname your-domain.ngrok-free.dev \
   --token keep-this-codexpro-token-stable
 ```
 
 CodexPro runs ngrok in the background with:
 
 ```bash
-ngrok http http://127.0.0.1:8787 --url https://your-domain.ngrok-free.app
+ngrok http http://127.0.0.1:8787 --url https://your-domain.ngrok-free.dev
 ```
 
 Put this Server URL into ChatGPT Developer Mode once:
 
 ```text
-https://your-domain.ngrok-free.app/mcp?codexpro_token=keep-this-codexpro-token-stable
+https://your-domain.ngrok-free.dev/mcp?codexpro_token=keep-this-codexpro-token-stable
 ```
 
 After that, keep using the same hostname and token. You do not need to recreate the ChatGPT app unless you change either one.
@@ -707,11 +745,11 @@ If both repositories use quick tunnels, different local ports are enough because
 If both repositories use stable ngrok or Cloudflare URLs, each repository also needs its own public hostname:
 
 ```text
-repo A  port 8787  codexpro-a.ngrok-free.app
-repo B  port 8788  codexpro-b.ngrok-free.app
+repo A  port 8787  codexpro-a.ngrok-free.dev
+repo B  port 8788  codexpro-b.ngrok-free.dev
 ```
 
-Do not point two running repositories at the same local port or the same reserved ngrok/Cloudflare hostname. The second process will fail because the port or public hostname is already owned by the first process.
+Do not point two running repositories at the same local port or the same ngrok/Cloudflare hostname. The second process will fail because the port or public hostname is already owned by the first process.
 
 For Namecheap and custom-domain setup, read [DOMAIN_SETUP.md](DOMAIN_SETUP.md). The key point is that a stable domain can solve your own repeated ChatGPT connector setup now, but a single shared URL for every future user needs a hosted relay or per-user tunnel routing.
 

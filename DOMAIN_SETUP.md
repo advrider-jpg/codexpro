@@ -150,9 +150,9 @@ Cloudflare tunnel token  lets cloudflared connect your machine to Cloudflare.
 CodexPro MCP token       protects the /mcp endpoint that ChatGPT calls.
 ```
 
-## Ngrok Reserved Domain
+## Ngrok Free Dev Domain
 
-Ngrok is the simpler personal stable URL if you already have an authenticated ngrok account and a reserved domain.
+Ngrok is the simpler personal stable URL for most users. A free ngrok account includes a dev domain, which can be saved once in CodexPro and reused every time the local server restarts.
 
 One-time setup:
 
@@ -161,10 +161,10 @@ brew install ngrok
 ngrok config add-authtoken <your-ngrok-token>
 ```
 
-Reserve a static domain in the ngrok dashboard, for example:
+Find your assigned dev domain in the ngrok dashboard under Universal Gateway -> Domains, for example:
 
 ```text
-your-domain.ngrok-free.app
+your-domain.ngrok-free.dev
 ```
 
 Daily startup:
@@ -172,7 +172,7 @@ Daily startup:
 ```bash
 codexpro ngrok \
   --root /absolute/path/to/your/repo \
-  --hostname your-domain.ngrok-free.app \
+  --hostname your-domain.ngrok-free.dev \
   --token replace-with-a-long-stable-token \
   --bash safe
 ```
@@ -182,11 +182,11 @@ Add this once in ChatGPT Developer Mode:
 ```text
 Name: CodexPro
 Connection: Server URL
-Server URL: https://your-domain.ngrok-free.app/mcp?codexpro_token=replace-with-a-long-stable-token
+Server URL: https://your-domain.ngrok-free.dev/mcp?codexpro_token=replace-with-a-long-stable-token
 Authentication: None / No Authentication
 ```
 
-CodexPro starts the local MCP server, runs `ngrok http http://127.0.0.1:8787 --url https://your-domain.ngrok-free.app`, waits for `/healthz`, copies the Server URL, and keeps both processes alive until you quit.
+CodexPro starts the local MCP server, runs `ngrok http http://127.0.0.1:8787 --url https://your-domain.ngrok-free.dev`, waits for `/healthz`, copies the Server URL, and keeps both processes alive until you quit.
 
 ## Product Plan For All Users
 

@@ -651,6 +651,34 @@ p {
   min-height: 230px;
 }
 
+.faq-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.faq-grid article {
+  min-height: 240px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(250, 204, 21, 0.08), transparent 46%),
+    rgba(13, 22, 38, 0.88);
+  padding: 24px;
+  box-shadow: var(--shadow);
+}
+
+.faq-grid h3 {
+  margin-bottom: 14px;
+  font-size: 21px;
+  line-height: 1.2;
+}
+
+.faq-grid p {
+  margin-bottom: 0;
+  font-size: 15px;
+}
+
 .reference-grid small,
 .tool-reference small {
   display: block;
@@ -800,6 +828,7 @@ dd {
   .value-section,
   .reference-grid,
   .reference-grid.compact,
+  .faq-grid,
   .tool-reference,
   .safety {
     grid-template-columns: 1fr;
@@ -821,7 +850,8 @@ dd {
   }
 
   .reference-grid article,
-  .reference-grid.compact article {
+  .reference-grid.compact article,
+  .faq-grid article {
     min-height: auto;
   }
 

@@ -15,13 +15,14 @@ function usage() {
   console.log(`CodexPro easy launcher
 
 Usage:
-  npx codexpro@latest start
-  codexpro start --root /path/to/repo
+  npm install -g codexpro
   codexpro setup
+  codexpro start
+  codexpro start --root /path/to/repo
   codexpro settings
   codexpro doctor
   codexpro --root /path/to/repo
-  codexpro ngrok --hostname your-domain.ngrok-free.app
+  codexpro ngrok --hostname your-domain.ngrok-free.dev
   codexpro stable --hostname codexpro.example.com --tunnel-name codexpro
   codexpro pro-bundle --root /path/to/repo --copy
   codexpro pro-apply --root /path/to/repo --file plan.md
@@ -50,9 +51,9 @@ Options:
                              handoff = ChatGPT can write .ai-bridge only; Codex edits source.
   --tunnel <none|cloudflare|cloudflare-named|ngrok>
                              Expose local MCP. Default: cloudflare.
-                             cloudflare = quick tunnel with a new URL each run.
+                             cloudflare = quick tunnel with a new URL each restart.
                              cloudflare-named = stable hostname using a named tunnel.
-                             ngrok = stable ngrok endpoint using --hostname/--url.
+                             ngrok = stable ngrok dev-domain endpoint using --hostname/--url.
   --stable                  Shortcut for --tunnel cloudflare-named.
   --hostname <host>          Stable public hostname for cloudflare-named or ngrok.
   --url <url>                Alias for --hostname in ngrok/stable URL modes.
@@ -89,7 +90,7 @@ Workspace settings:
   codexpro settings
   codexpro settings show
   codexpro settings list
-  codexpro settings set --tunnel ngrok --hostname your-domain.ngrok-free.app
+  codexpro settings set --tunnel ngrok --hostname your-domain.ngrok-free.dev
   codexpro settings use
   codexpro settings delete --yes
 
@@ -97,7 +98,7 @@ Preflight diagnostics:
   codexpro doctor
 
 Ngrok stable URL mode:
-  codexpro ngrok --root /path/to/repo --hostname your-domain.ngrok-free.app
+  codexpro ngrok --root /path/to/repo --hostname your-domain.ngrok-free.dev
 
 Planning-only handoff mode:
   codexpro start --root /path/to/repo --mode handoff
@@ -886,7 +887,7 @@ function printStableUrlHelp() {
   console.log('');
   console.log('Ngrok alternative with a reserved domain:');
   console.log('  ngrok config add-authtoken <your-ngrok-token>');
-  console.log('  codexpro ngrok --hostname your-domain.ngrok-free.app --token keep-this-stable-token');
+  console.log('  codexpro ngrok --hostname your-domain.ngrok-free.dev --token keep-this-stable-token');
   console.log('');
 }
 
@@ -1072,7 +1073,7 @@ async function collectTunnelPreference(rl, defaults, profile, options = {}) {
       'Ngrok domain or URL, without /mcp',
       optionValue(defaults, profile, 'hostname', ['CODEXPRO_PUBLIC_HOSTNAME', 'CODEXPRO_HOSTNAME', 'NGROK_DOMAIN'], '')
     );
-    if (!hostname) throw new Error('Ngrok setup needs your reserved domain, for example name.ngrok-free.app.');
+    if (!hostname) throw new Error('Ngrok setup needs your reserved domain, for example name.ngrok-free.dev.');
     ngrokConfig = optionValue(defaults, profile, 'ngrokConfig', ['NGROK_CONFIG', 'CODEXPRO_NGROK_CONFIG'], '');
   } else if (tunnel === 'cloudflare-named') {
     hostname = await ask(
@@ -1232,7 +1233,7 @@ async function runSetupWizard(argv) {
       'ChatGPT needs an HTTPS URL it can reach.',
       'quick  = CodexPro creates a Cloudflare quick tunnel for demos and local work.',
       'stable = use your own domain with a Cloudflare named tunnel so the ChatGPT app URL does not change.',
-      'ngrok  = use your reserved ngrok domain, for example https://name.ngrok-free.app.',
+      'ngrok  = use your ngrok free dev domain, for example https://name.ngrok-free.dev.',
       'local  = no tunnel, only useful for local MCP clients that can reach 127.0.0.1.'
     ]);
 
@@ -1281,7 +1282,7 @@ async function runSetupWizard(argv) {
         'Ngrok domain or URL, without /mcp',
         optionValue(defaults, profile, 'hostname', ['CODEXPRO_PUBLIC_HOSTNAME', 'CODEXPRO_HOSTNAME', 'NGROK_DOMAIN'], '')
       );
-      if (!hostname) throw new Error('Ngrok setup needs your reserved domain, for example name.ngrok-free.app.');
+      if (!hostname) throw new Error('Ngrok setup needs your reserved domain, for example name.ngrok-free.dev.');
       profileHostname = hostname;
       args.push('--tunnel', 'ngrok', '--hostname', hostname);
       const ngrokConfig = optionValue(defaults, profile, 'ngrokConfig', ['NGROK_CONFIG', 'CODEXPRO_NGROK_CONFIG'], '');
@@ -1689,7 +1690,7 @@ async function main() {
     throw new Error('--hostname is required with stable URL mode.');
   }
   if (tunnel === 'ngrok' && !stableHostname) {
-    throw new Error('--hostname is required with ngrok tunnel mode. Example: codexpro ngrok --hostname your-domain.ngrok-free.app');
+    throw new Error('--hostname is required with ngrok tunnel mode. Example: codexpro ngrok --hostname your-domain.ngrok-free.dev');
   }
   const mode = optionValue(args, profile, 'mode', ['CODEXPRO_MODE'], 'agent');
   if (!['agent', 'handoff', 'pro'].includes(mode)) {
@@ -1796,8 +1797,8 @@ async function main() {
         'Ngrok stable domains need one-time setup before this can succeed:',
         '',
         '  ngrok config add-authtoken <your-ngrok-token>',
-        '  reserve a static domain in the ngrok dashboard',
-        '  codexpro ngrok --hostname your-domain.ngrok-free.app --token keep-this-stable-token',
+        '  find your free ngrok dev domain in the ngrok dashboard',
+        '  codexpro ngrok --hostname your-domain.ngrok-free.dev --token keep-this-stable-token',
         '',
         'If the domain is already in use, stop the other ngrok process or choose another reserved domain.'
       ].join('\n');
