@@ -575,9 +575,18 @@ function optionBool(args, profile, field, envNames = [], fallback = false) {
   return fallback;
 }
 
+function hasToolCardsInput(args, profile = {}) {
+  return args.toolCards !== undefined || profile.toolCards !== undefined || (process.env.CODEXPRO_TOOL_CARDS !== undefined && process.env.CODEXPRO_TOOL_CARDS !== '');
+}
+
 function toolCardsProfileEntry(args, profile = {}) {
-  const hasInput = args.toolCards !== undefined || profile.toolCards !== undefined || process.env.CODEXPRO_TOOL_CARDS !== undefined;
+  const hasInput = hasToolCardsInput(args, profile);
   return hasInput ? { toolCards: optionBool(args, profile, 'toolCards', ['CODEXPRO_TOOL_CARDS'], false) } : {};
+}
+
+function toolCardsCliArgs(args, profile = {}) {
+  if (!hasToolCardsInput(args, profile)) return [];
+  return ['--tool-cards', optionBool(args, profile, 'toolCards', ['CODEXPRO_TOOL_CARDS'], false) ? 'on' : 'off'];
 }
 
 function validateBashSession(value) {
@@ -2734,7 +2743,7 @@ async function runSetupWizard(argv) {
     if (write) args.push('--write', write);
     if (toolMode) args.push('--tool-mode', toolMode);
     if (widgetDomain) args.push('--widget-domain', widgetDomain);
-    if (toolCardsEntry.toolCards) args.push('--tool-cards', 'on');
+    args.push(...toolCardsCliArgs(defaults, profile));
     if (defaults.noInstallCloudflared) args.push('--no-install-cloudflared');
     if (defaults.openChatgpt) args.push('--open-chatgpt');
     if (defaults.noCopyUrl) args.push('--no-copy-url');
