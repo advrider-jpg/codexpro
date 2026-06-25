@@ -3334,7 +3334,8 @@ async function main() {
     bashTranscript,
     codexSessions,
     bashSession,
-    requireBashSession
+    requireBashSession,
+    toolCards
   };
 
   if (tunnel === 'none') {
