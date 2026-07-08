@@ -43,6 +43,11 @@ export function sha256(text: string): string {
   return createHash("sha256").update(text).digest("hex");
 }
 
+// ponytail: bounded scan window covers normal source files over the read cap; add a separate knob only if real repos need larger files.
+export function textScanByteLimit(config: CodexProConfig): number {
+  return Math.min(2_000_000, config.maxReadBytes * 4);
+}
+
 function splitLines(text: string): string[] {
   return text.replace(/\r\n/g, "\n").split("\n");
 }
@@ -204,7 +209,8 @@ export async function readTextFile(
 ): Promise<ReadFileResult> {
   const resolved = guard.resolve(workspace, filePath);
   const maxBytes = Math.min(options.maxBytes ?? config.maxReadBytes, config.maxReadBytes);
-  await guard.assertTextFile(resolved.absPath, maxBytes);
+  const hasRange = options.startLine !== undefined || options.endLine !== undefined;
+  await guard.assertTextFile(resolved.absPath, hasRange ? textScanByteLimit(config) : maxBytes);
   const buffer = await fsp.readFile(resolved.absPath);
   const text = buffer.toString("utf8");
   const allLines = splitLines(text);
@@ -216,6 +222,9 @@ export async function readTextFile(
   }
   const selected = allLines.slice(startLine - 1, endLine);
   const numbered = withLineNumbers(selected, startLine);
+  if (hasRange && Buffer.byteLength(numbered, "utf8") > maxBytes) {
+    throw new CodexProError(`Selected line range is too large. Limit: ${maxBytes} bytes.`);
+  }
   const truncated = startLine > 1 || endLine < totalLines;
   return {
     path: resolved.relPath,

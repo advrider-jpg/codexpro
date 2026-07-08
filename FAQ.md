@@ -273,11 +273,21 @@ Use it with repos you trust. Keep token auth enabled for public tunnels. Keep sa
 
 ## Where are saved settings stored?
 
-Workspace profiles are saved under:
+CodexPro stores local state under `~/.codexpro` by default. On Windows that is usually `C:\Users\<you>\.codexpro`.
+
+Workspace profiles are JSON files saved under:
 
 ```text
 ~/.codexpro/profiles/
 ```
+
+Current runtime connection files are saved under:
+
+```text
+~/.codexpro/runtime/
+```
+
+Set `CODEXPRO_HOME` to move this directory.
 
 Use:
 

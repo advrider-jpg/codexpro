@@ -537,15 +537,33 @@ async function runSupertoolModeStress(root) {
 
 async function runMaxReadSearchStress() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codexpro-stress-max-read-'));
-  await fs.writeFile(path.join(root, 'large.txt'), `needle in large file\n${'x'.repeat(5000)}\n`, 'utf8');
+  await fs.writeFile(path.join(root, 'many-lines.txt'), `${Array.from({ length: 1200 }, (_, i) => `x${i % 10}`).join('\n')}\n`, 'utf8');
+  await fs.writeFile(path.join(root, 'large.txt'), `intro\n${'x'.repeat(4500)}\nneedle in large file\n`, 'utf8');
+  await fs.writeFile(path.join(root, 'huge.txt'), `needle in huge file\n${'x'.repeat(20000)}\n`, 'utf8');
   const client = await initClient(root, { CODEXPRO_MAX_READ_BYTES: '1000' });
   try {
     const opened = await client.request('tools/call', { name: 'open_current_workspace', arguments: { include_tree: false } });
+    const manyLinesRead = await client.request('tools/call', {
+      name: 'read',
+      arguments: { workspace_id: opened.structuredContent.workspace_id, path: 'many-lines.txt' }
+    });
+    assert(manyLinesRead.isError !== true && manyLinesRead.structuredContent.endLine === 1201, `full read under maxReadBytes failed after line numbering: ${JSON.stringify(manyLinesRead.structuredContent)}`);
+    const fullRead = await client.request('tools/call', {
+      name: 'read',
+      arguments: { workspace_id: opened.structuredContent.workspace_id, path: 'large.txt' }
+    });
+    assert(fullRead.isError === true && String(fullRead.structuredContent.error).includes('too large'), 'full read ignored maxReadBytes');
+    const rangedRead = await client.request('tools/call', {
+      name: 'read',
+      arguments: { workspace_id: opened.structuredContent.workspace_id, path: 'large.txt', start_line: 3, end_line: 3 }
+    });
+    assert(rangedRead.isError !== true && rangedRead.structuredContent.text.includes('needle in large file'), `ranged read failed above maxReadBytes: ${JSON.stringify(rangedRead.structuredContent)}`);
     const search = await client.request('tools/call', {
       name: 'search',
-      arguments: { workspace_id: opened.structuredContent.workspace_id, query: 'needle in large file', max_results: 10 }
+      arguments: { workspace_id: opened.structuredContent.workspace_id, query: 'needle', max_results: 10 }
     });
-    assert(search.structuredContent.matches.length === 0, `search ignored maxReadBytes: ${JSON.stringify(search.structuredContent.matches)}`);
+    assert(search.structuredContent.matches.some((match) => match.path === 'large.txt'), `search skipped slightly large file: ${JSON.stringify(search.structuredContent.matches)}`);
+    assert(!search.structuredContent.matches.some((match) => match.path === 'huge.txt'), `search scanned file beyond text scan cap: ${JSON.stringify(search.structuredContent.matches)}`);
   } finally {
     client.close();
   }
