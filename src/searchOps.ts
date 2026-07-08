@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import type { CodexProConfig } from "./config.js";
 import type { Workspace } from "./guard.js";
 import { CodexProError, PathGuard } from "./guard.js";
-import { listFiles } from "./fsOps.js";
+import { listFiles, textScanByteLimit } from "./fsOps.js";
 import { redactSensitiveText } from "./redact.js";
 
 export interface SearchOptions {
@@ -40,7 +40,7 @@ function truncateLine(line: string, max = 400): string {
 
 async function runRipgrep(config: CodexProConfig, guard: PathGuard, workspace: Workspace, options: SearchOptions): Promise<SearchResult> {
   const target = guard.resolve(workspace, options.root ?? ".");
-  const args = ["--json", "--line-number", "--with-filename", "--no-heading", "--color=never", "--max-columns", "500", "--max-count", "50", "--max-filesize", String(config.maxReadBytes)];
+  const args = ["--json", "--line-number", "--with-filename", "--no-heading", "--color=never", "--max-columns", "500", "--max-count", "50", "--max-filesize", String(textScanByteLimit(config))];
   if (!options.regex) args.push("--fixed-strings");
   if (options.includeHidden) args.push("--hidden");
   for (const glob of config.blockedGlobs) args.push("-g", `!${glob}`);
@@ -96,13 +96,14 @@ async function runNodeSearch(config: CodexProConfig, guard: PathGuard, workspace
   });
   const matches: Array<{ path: string; line: number; text: string }> = [];
   let visibleMatches = 0;
+  const scanBytes = textScanByteLimit(config);
   const matcher = options.regex ? new RegExp(options.query) : undefined;
   for (const rel of files) {
     if (visibleMatches > options.maxResults) break;
     const resolved = guard.resolve(workspace, rel);
     try {
       const stat = await fsp.stat(resolved.absPath);
-      if (stat.size > config.maxReadBytes) continue;
+      if (stat.size > scanBytes) continue;
       const buffer = await fsp.readFile(resolved.absPath);
       if (buffer.includes(0)) continue;
       const lines = buffer.toString("utf8").split(/\r?\n/);
