@@ -48,7 +48,8 @@ user needs to decide what to do next.
   tests or risk signals, and a collapsible diff or detail area.
 - **Terminal:** command, exit state, duration, and a bounded code preview.
   Standard output and errors remain collapsible rather than taking over the
-  chat.
+  chat. The displayed command/output has a feature-detected local copy control
+  matching the familiar ChatGPT code-block affordance.
 - **Handoff:** plan/status paths and a short next-step summary.
 - **Git status:** changed files with clear status markers.
 
@@ -71,8 +72,10 @@ infinite skeleton. No result content is fabricated.
 
 The widget continues to have an empty network/resource CSP. It uses no remote
 font, image, stylesheet, analytics, iframe, external link, browser storage, or
-tool invocation from the UI. Existing redaction, payload bounds, filesystem
-guarding, and tool-mode gates remain unchanged.
+tool invocation from the UI. Its only local interaction is copying the bounded
+text already rendered in a terminal card, with a visible fallback when the
+host does not support clipboard access. Existing redaction, payload bounds,
+filesystem guarding, and tool-mode gates remain unchanged.
 
 ## Validation
 
