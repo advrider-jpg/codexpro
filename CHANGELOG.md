@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.29.0-beta.2 (npm beta, 2026-07-13)
 
 - Replaced the heavy v9 Apps widget with a compact, host-theme-aware v10 card for selected user-visible results: workspace, analysis, changes, Git status, handoff, and terminal verification.
 - Fixed cards that stayed on a loading placeholder after ChatGPT completed a tool call by accepting bounded nested result envelopes and showing a clear unavailable state instead of an infinite animation.
