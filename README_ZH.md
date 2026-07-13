@@ -50,7 +50,7 @@ cd /path/to/your/repo
 codexpro setup
 ```
 
-CodexPro 会自动复制 ChatGPT Server URL。先到 `Settings -> Security and login` 打开 Developer mode，再到 `Settings -> Plugins` 创建连接，粘贴这个 URL，并选择 `Authentication: No Authentication / None`。
+CodexPro 会自动复制 ChatGPT Server URL。先到 `Settings -> Security and login` 打开 Developer mode，再到 `Settings -> Plugins -> Plugins` 标签页，点击搜索框旁的圆形 `+` 图标。打开 **New Plugin** 后，粘贴这个 URL，连接方式选择 `Server URL`，并选择 `Authentication: No Authentication / None`。表单可能默认显示 OAuth，请在创建前改为 No Authentication / None。
 
 以后同一个仓库日常启动只需要：
 
@@ -128,12 +128,13 @@ ChatGPT Settings
 
 ChatGPT Settings
 -> Plugins
--> Create
+-> Plugins 标签页
+-> 点击搜索框旁的 +
 ```
 
 保留 CSP 开启。CodexPro 的卡片和小组件就是按 CSP 开启的路径设计的，不需要远程脚本、外部字体、iframe 或第三方图片。
 
-在创建 Plugin 页面填写：
+在打开的 New Plugin 页面填写：
 
 ```text
 Name: CodexPro
@@ -143,7 +144,7 @@ Server URL: 粘贴 CodexPro 自动复制的 URL
 Authentication: No Authentication / None
 ```
 
-复制的 Server URL 已经包含私有 `codexpro_token`。不要单独粘贴 token，除非你的 ChatGPT UI 明确支持自定义 header。
+表单可能默认显示 OAuth；请改为 `No Authentication / None`。复制的 Server URL 已经包含私有 `codexpro_token`。不要单独粘贴 token，除非你的 ChatGPT UI 明确支持自定义 header。
 
 保持终端里的 CodexPro 进程运行。你停止它之后，ChatGPT 就无法继续连接本地仓库。Cloudflare quick tunnel 的 URL 也会失效。
 

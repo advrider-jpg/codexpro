@@ -246,14 +246,14 @@ codexpro setup</code>
             <span>3</span>
             <div>
               <strong>Turn on Developer Mode</strong>
-              <p>In ChatGPT, open Settings -> Security and login. Turn on Developer mode and keep Enforce CSP in developer mode enabled, then go to Settings -> Plugins and create the connection.</p>
+              <p>In ChatGPT, open Settings -> Security and login. Turn on Developer mode and keep Enforce CSP in developer mode enabled. Then open Settings -> Plugins, stay on the Plugins tab, and click the circular + beside Search plugins.</p>
             </div>
           </div>
           <div class="step">
             <span>4</span>
             <div>
               <strong>Create a ChatGPT plugin</strong>
-              <p>Name it CodexPro. Use Connection: Server URL. Paste the copied URL. Set Authentication to No Authentication / None.</p>
+              <p>In New Plugin, name it CodexPro. Use Connection: Server URL and paste the copied URL. The form may default to OAuth; set Authentication to No Authentication / None before creating the plugin.</p>
             </div>
           </div>
           <div class="step">
@@ -412,7 +412,7 @@ cloudflared tunnel route dns codexpro codexpro.example.com</code></pre>
               <div><dt>Go to</dt><dd>Security and login</dd></div>
               <div><dt>Enable</dt><dd>Developer mode</dd></div>
               <div><dt>Keep on</dt><dd>Enforce CSP in developer mode</dd></div>
-              <div><dt>Then</dt><dd>Plugins -> Create</dd></div>
+              <div><dt>Then</dt><dd>Plugins -> Plugins tab -> + beside Search plugins</dd></div>
             </dl>
             <p>This is a one-time ChatGPT setting. CodexPro widgets work with CSP enabled.</p>
           </article>
@@ -426,7 +426,7 @@ cloudflared tunnel route dns codexpro codexpro.example.com</code></pre>
               <div><dt>Server URL</dt><dd>Paste copied CodexPro URL</dd></div>
               <div><dt>Authentication</dt><dd>No Authentication / None</dd></div>
             </dl>
-            <p>The copied Server URL already includes the private CodexPro token. Do not paste the token separately unless your ChatGPT UI supports custom headers.</p>
+            <p>The form may initially show OAuth; select No Authentication / None. The copied Server URL already includes the private CodexPro token. Do not paste the token separately unless your ChatGPT UI supports custom headers.</p>
           </article>
           <article>
             <small>Doctor</small>

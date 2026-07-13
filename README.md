@@ -40,11 +40,10 @@ CodexPro prints and copies the Server URL. In ChatGPT, open:
 
 ```text
 Settings -> Security and login -> Developer mode: on
-Settings -> Plugins -> Create
+Settings -> Plugins -> Plugins tab -> + (beside Search plugins)
 ```
 
-Paste the Server URL and choose `Authentication: No Authentication / None`.
-CodexPro uses its own URL token.
+This opens **New Plugin**. Give it a name such as `CodexPro`, paste the Server URL in the **Server URL** connection option, then choose `Authentication: No Authentication / None`. The form may initially show OAuth; change it before creating the plugin. CodexPro uses its own URL token.
 
 Daily use from the same repo:
 
