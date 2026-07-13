@@ -5,6 +5,7 @@
 - Replaced the heavy v9 Apps widget with a compact, host-theme-aware v10 card for selected user-visible results: workspace, analysis, changes, Git status, handoff, and terminal verification.
 - Fixed cards that stayed on a loading placeholder after ChatGPT completed a tool call by accepting bounded nested result envelopes and showing a clear unavailable state instead of an infinite animation.
 - Kept raw reads and searches in normal chat output, added local copy support only for bounded terminal results, and added widget bridge smoke coverage.
+- Added guarded release scripts that reject wrong-folder and `npm --prefix` pack/publish attempts, verify the canonical CodexPro tarball, and require a full release check before publishing.
 
 ## 0.29.0-beta.1 (npm beta, 2026-07-11)
 

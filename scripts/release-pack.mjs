@@ -1,0 +1,45 @@
+import { spawnSync } from "node:child_process";
+import { CODEXPRO_PACKAGE, assertCodexProReleaseEnvironment } from "./release-guard.mjs";
+
+const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+
+function fail(message) {
+  throw new Error(message);
+}
+
+try {
+  const release = assertCodexProReleaseEnvironment();
+  const packed = spawnSync(npm, ["pack", "--dry-run", "--ignore-scripts", "--json"], {
+    cwd: release.root,
+    encoding: "utf8",
+    env: { ...process.env, INIT_CWD: release.root }
+  });
+
+  if (packed.error) fail(`npm pack could not start: ${packed.error.message}`);
+  if (packed.status !== 0) fail(`npm pack failed: ${(packed.stderr || packed.stdout).trim()}`);
+
+  let packages;
+  try {
+    packages = JSON.parse(packed.stdout);
+  } catch {
+    fail("npm pack did not return a JSON package manifest.");
+  }
+  const tarball = Array.isArray(packages) ? packages[0] : null;
+  if (!tarball || tarball.name !== CODEXPRO_PACKAGE || tarball.version !== release.version) {
+    fail(`Expected ${CODEXPRO_PACKAGE}@${release.version}; npm pack selected ${tarball?.name ?? "(missing)"}@${tarball?.version ?? "(missing)"}.`);
+  }
+  if (tarball.filename !== `${CODEXPRO_PACKAGE}-${release.version}.tgz`) {
+    fail(`Unexpected tarball filename: ${tarball.filename ?? "(missing)"}.`);
+  }
+
+  console.log(JSON.stringify({
+    name: tarball.name,
+    version: tarball.version,
+    filename: tarball.filename,
+    size: tarball.size,
+    unpackedSize: tarball.unpackedSize
+  }, null, 2));
+} catch (error) {
+  console.error(`[release pack] ${error.message}`);
+  process.exitCode = 1;
+}

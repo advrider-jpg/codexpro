@@ -253,12 +253,18 @@ npm run stress
 Useful release checks:
 
 ```bash
-npm run build
-npm run smoke
-CODEXPRO_TOOL_CARDS=1 npm run smoke
-npm audit --audit-level=high
-npm pack --dry-run
+npm run release:check
 git diff --check
+```
+
+Release only from the CodexPro project root. Do not use `npm --prefix` with
+`npm pack` or `npm publish`: npm packs the current directory in that case.
+The release scripts verify the root, package identity, canonical repository,
+and tarball before publishing:
+
+```bash
+cd /path/to/codexpro
+npm run release:publish
 ```
 
 ## Docs
