@@ -45,6 +45,12 @@ Settings -> Plugins -> Plugins tab -> + (beside Search plugins)
 
 This opens **New Plugin**. Give it a name such as `CodexPro`, paste the Server URL in the **Server URL** connection option, then choose `Authentication: No Authentication / None`. The form may initially show OAuth; change it before creating the plugin. CodexPro uses its own URL token.
 
+### Current Plugins UI
+
+| Open Plugins and click `+` | Complete the New Plugin form |
+| --- | --- |
+| ![Open Plugins and click the plus button](docs/images/chatgpt-plugins-add.png) | ![Complete the New Plugin form](docs/images/chatgpt-plugin-details.png) |
+
 Daily use from the same repo:
 
 ```bash

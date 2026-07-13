@@ -52,6 +52,12 @@ codexpro setup
 
 CodexPro 会自动复制 ChatGPT Server URL。先到 `Settings -> Security and login` 打开 Developer mode，再到 `Settings -> Plugins -> Plugins` 标签页，点击搜索框旁的圆形 `+` 图标。打开 **New Plugin** 后，粘贴这个 URL，连接方式选择 `Server URL`，并选择 `Authentication: No Authentication / None`。表单可能默认显示 OAuth，请在创建前改为 No Authentication / None。
 
+### 当前 Plugins UI
+
+| 打开 Plugins 并点击 `+` | 填写 New Plugin 表单 |
+| --- | --- |
+| ![打开 Plugins 并点击加号](docs/images/chatgpt-plugins-add.png) | ![填写 New Plugin 表单](docs/images/chatgpt-plugin-details.png) |
+
 以后同一个仓库日常启动只需要：
 
 ```bash
