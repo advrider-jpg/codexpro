@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 function run(args, env) {
   const result = spawnSync(process.execPath, ['scripts/codexpro.mjs', ...args], {
@@ -72,11 +73,25 @@ async function waitForJson(filePath, predicate, label) {
   throw new Error(`timed out waiting for ${label}: ${lastError?.message ?? 'predicate not met'}`);
 }
 
+async function waitForMissing(filePath, label) {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    try {
+      await fs.access(filePath);
+    } catch (error) {
+      if (error?.code === 'ENOENT') return;
+      throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`timed out waiting for ${label} to be removed`);
+}
+
 async function withStartedCodexPro(args, env, fn) {
   const child = spawn(process.execPath, ['scripts/codexpro.mjs', 'start', ...args], {
     cwd: path.resolve('.'),
     env,
-    stdio: ['ignore', 'pipe', 'pipe']
+    stdio: ['pipe', 'pipe', 'pipe']
   });
   let output = '';
   let closed = false;
@@ -91,7 +106,15 @@ async function withStartedCodexPro(args, env, fn) {
   } catch (error) {
     throw new Error(`${error.message}\nstart output:\n${output}`);
   } finally {
-    if (!closed) child.kill('SIGTERM');
+    if (!closed) {
+      child.stdin.write('q\n');
+      child.stdin.end();
+      const graceful = await Promise.race([
+        closedPromise.then(() => true),
+        new Promise((resolve) => setTimeout(() => resolve(false), 5_000))
+      ]);
+      if (!graceful) child.kill('SIGTERM');
+    }
     await closedPromise;
   }
 }
@@ -189,7 +212,20 @@ const runtimeRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'codexpro-settings-r
 const staleRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'codexpro-settings-stale-'));
 const ngrokRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'codexpro-settings-ngrok-'));
 const home = await fs.mkdtemp(path.join(os.tmpdir(), 'codexpro-settings-home-'));
-const env = { ...process.env, CODEXPRO_HOME: home };
+const healthPreload = path.join(home, 'fake-public-health.mjs');
+await fs.writeFile(healthPreload, [
+  'const realFetch = globalThis.fetch;',
+  'globalThis.fetch = async (input, init) => {',
+  '  const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);',
+  '  if (url.hostname.endsWith(".trycloudflare.com") && url.pathname === "/healthz") {',
+  '    return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });',
+  '  }',
+  '  return realFetch(input, init);',
+  '};',
+  ''
+].join('\n'));
+const nodeOptions = [process.env.NODE_OPTIONS, `--import=${pathToFileURL(healthPreload).href}`].filter(Boolean).join(' ');
+const env = { ...process.env, CODEXPRO_HOME: home, NODE_OPTIONS: nodeOptions };
 function withoutProxyEnv(input) {
   const next = { ...input };
   for (const key of ['HTTPS_PROXY', 'https_proxy', 'ALL_PROXY', 'all_proxy', 'HTTP_PROXY', 'http_proxy']) delete next[key];
@@ -438,12 +474,7 @@ await withStartedCodexPro([
     throw new Error(`runtime status did not persist toolCards: ${JSON.stringify(runtime)}`);
   }
 });
-try {
-  await fs.access(runtimePath);
-  throw new Error('runtime status was not cleared after launcher SIGTERM');
-} catch (error) {
-  if (error?.code !== 'ENOENT') throw error;
-}
+await waitForMissing(runtimePath, 'runtime status after launcher shutdown');
 
 const quitRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'codexpro-settings-quit-'));
 const quitPort = await getFreePort();
@@ -500,13 +531,13 @@ const proxyCloudflareRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'codexpro-se
 const proxyCloudflarePort = await getFreePort();
 const proxyCloudflarePath = await runtimeStatusPath(proxyCloudflareRoot, home);
 const fakeBin = await fs.mkdtemp(path.join(os.tmpdir(), 'codexpro-settings-fake-bin-'));
-const fakeCurl = path.join(fakeBin, 'curl');
+const fakeCurl = path.join(fakeBin, 'curl.mjs');
 const curlArgsPath = path.join(home, 'fake-curl-args.json');
 const cloudflaredArgsPath = path.join(home, 'fake-cloudflared-proxy-args.json');
 const fakeProxyCloudflared = path.join(home, 'fake-cloudflared-proxy.mjs');
 await fs.writeFile(fakeCurl, [
   '#!/usr/bin/env node',
-  "const fs = require('node:fs');",
+  "import fs from 'node:fs';",
   "fs.writeFileSync(process.env.CODEXPRO_FAKE_CURL_ARGS, JSON.stringify(process.argv.slice(2)));",
   "console.log(JSON.stringify({ success: true, result: { id: 'proxy-tunnel-id', hostname: 'proxy-codexpro.trycloudflare.com', account_tag: 'account-tag', secret: 'proxy-secret-1234567890' } }));",
   ''
@@ -539,6 +570,7 @@ await withStartedCodexPro([
   ...env,
   PATH: `${fakeBin}${path.delimiter}${process.env.PATH ?? ''}`,
   HTTPS_PROXY: 'http://proxy.example.test:8080',
+  CODEXPRO_CURL_BIN: fakeCurl,
   CODEXPRO_FAKE_CURL_ARGS: curlArgsPath,
   CODEXPRO_FAKE_CLOUDFLARED_ARGS: cloudflaredArgsPath
 }, async () => {
@@ -590,6 +622,7 @@ const proxyFailure = runFail([
   ...env,
   PATH: `${fakeBin}${path.delimiter}${process.env.PATH ?? ''}`,
   HTTPS_PROXY: 'http://proxy.example.test:8080',
+  CODEXPRO_CURL_BIN: fakeCurl,
   CODEXPRO_FAKE_CURL_ARGS: path.join(home, 'fake-curl-fail-args.json')
 }, /exited before startup completed/);
 if (!proxyFailure.includes('proxy tunnel startup failed')) {

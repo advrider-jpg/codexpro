@@ -8,7 +8,7 @@ import type { CodexProConfig } from "./config.js";
 import { WorkspaceManager, PathGuard, CodexProError, type Workspace } from "./guard.js";
 import { repoTree, readTextFile, writeTextFile, editTextFile, ensureAiBridge } from "./fsOps.js";
 import { searchWorkspace } from "./searchOps.js";
-import { runBash } from "./bashOps.js";
+import { executionBackend, runBash } from "./bashOps.js";
 import { gitDiff, gitDiffStatus, gitLog, gitStatus } from "./gitOps.js";
 import { readAiBridgeContext, readCodexContext, workspaceSummary } from "./workspaceOps.js";
 import { buildProContext, exportProContext } from "./proContext.js";
@@ -1058,6 +1058,7 @@ export function createCodexProServer(config: CodexProConfig): McpServer {
         connectionTest: config.connectionTest,
         analysisEnabled: config.analysisEnabled,
         analysisLimits: config.analysisLimits,
+        executionBackend: executionBackend(),
         inheritEnv: config.inheritEnv,
         contextDir: config.contextDir,
         maxReadBytes: config.maxReadBytes,
@@ -1220,17 +1221,14 @@ export function createCodexProServer(config: CodexProConfig): McpServer {
             check("bash policy", "warn", "bash disabled");
           } else {
             const bashProbeOptions = { timeoutMs: 10_000, sessionId: config.bashSessionId };
-            const pwd = await runBash(config, guard, workspace, "pwd", bashProbeOptions);
-            if (config.bashMode === "safe") {
-              try {
-                await runBash(config, guard, workspace, "ls $HOME", bashProbeOptions);
-                check("bash policy", "fail", "safe bash allowed environment expansion unexpectedly");
-              } catch {
-                check("bash policy", pwd.exitCode === 0 ? "pass" : "warn", "safe bash allowed pwd and blocked environment expansion");
-              }
-            } else {
-              check("bash policy", pwd.exitCode === 0 ? "warn" : "fail", "full bash is enabled; use only for trusted local repos");
-            }
+            const probe = await runBash(config, guard, workspace, "pwd", bashProbeOptions);
+            const expectedCwd = path.resolve(workspace.root);
+            const actualCwd = probe.stdout.split(/\r?\n/).map((line) => line.trim()).find((line) => path.isAbsolute(line));
+            const cwdOk = actualCwd ? path.resolve(actualCwd) === expectedCwd : false;
+            const executionOk = probe.exitCode === 0 && !probe.spawnError && cwdOk;
+            check("bash execution backend", executionOk ? "pass" : "fail", `${probe.backend}; exit=${probe.exitCode}; cwd=${cwdOk ? "honored" : "not honored"}${probe.spawnError ? "; process spawn failed" : ""}`);
+            if (config.bashMode === "safe") check("bash policy", executionOk ? "pass" : "fail", "safe policy and production executor probe completed");
+            else check("bash policy", executionOk ? "warn" : "fail", "full bash is enabled; use only for trusted local repos");
           }
         } catch (error) {
           check("bash policy", "fail", errorText(error));
