@@ -673,10 +673,21 @@ if (!pwdBashText.includes('Exit: 0') || pwdBashText.includes('## stdout') || pwd
 if (!pwdBash.structuredContent.stdout?.includes(tmp)) {
   throw new Error(`compact bash transcript dropped structured stdout: ${JSON.stringify(pwdBash.structuredContent)}`);
 }
+if (process.platform === 'win32' && pwdBash.structuredContent.backend !== 'native_windows_direct') {
+  throw new Error(`Windows selected an unexpected executor backend: ${JSON.stringify(pwdBash.structuredContent)}`);
+}
 await expectToolError('bash', { workspace_id: ws, command: 'find /tmp' }, /blocked/i);
 await expectToolError('bash', { workspace_id: ws, command: 'find . -fprint leaked.txt' }, /blocked/i);
 await expectToolError('bash', { workspace_id: ws, command: 'git show HEAD:.env' }, /blocked/i);
 await expectToolError('bash', { workspace_id: ws, command: 'ls $HOME' }, /blocked/i);
+await expectToolError('bash', { workspace_id: ws, command: 'python -c "print(1)"' }, /allowlist/i);
+const quotedPathProbe = await client.request('tools/call', {
+  name: 'bash',
+  arguments: { workspace_id: ws, command: 'git rev-parse --sq-quote "C:\\folder with space\\file.txt"' }
+});
+if (quotedPathProbe.structuredContent.exitCode !== 0 || !quotedPathProbe.structuredContent.stdout?.includes('C:\\folder with space\\file.txt')) {
+  throw new Error(`quoted Windows-style path was not preserved: ${JSON.stringify(quotedPathProbe.structuredContent)}`);
+}
 const clientBuild = await client.request('tools/call', { name: 'bash', arguments: { workspace_id: ws, command: 'npm run build:clients', timeout_ms: 60000 } });
 if (!clientBuild.structuredContent.stdout?.includes('clients ok')) {
   throw new Error('safe bash did not run npm run build:clients');

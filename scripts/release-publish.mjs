@@ -1,10 +1,13 @@
 import { spawnSync } from "node:child_process";
+import { dirname, join } from "node:path";
 import { assertCodexProReleaseEnvironment } from "./release-guard.mjs";
 
-const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+const npmCli = process.env.npm_execpath ?? join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
+const npmCommand = process.platform === "win32" ? process.execPath : "npm";
+const npmArgs = (args) => process.platform === "win32" ? [npmCli, ...args] : args;
 
 function runNpm(args, root) {
-  const result = spawnSync(npm, args, {
+  const result = spawnSync(npmCommand, npmArgs(args), {
     cwd: root,
     stdio: "inherit",
     env: { ...process.env, INIT_CWD: root }

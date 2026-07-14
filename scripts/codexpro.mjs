@@ -870,7 +870,7 @@ async function downloadFile(url, destination) {
 }
 
 function verifyCloudflared(binaryPath) {
-  const result = spawnSync(binaryPath, ['--version'], {
+  const result = spawnSyncExternal(binaryPath, ['--version'], {
     stdio: 'ignore',
     shell: false,
     timeout: 15000
@@ -959,7 +959,7 @@ async function resolveCloudflared(args) {
 }
 
 function verifyNgrok(binaryPath) {
-  const result = spawnSync(binaryPath, ['version'], {
+  const result = spawnSyncExternal(binaryPath, ['version'], {
     stdio: 'ignore',
     shell: false,
     timeout: 15000
@@ -989,7 +989,7 @@ function resolveNgrok(args) {
 }
 
 function verifyTailscale(binaryPath) {
-  const result = spawnSync(binaryPath, ['version'], {
+  const result = spawnSyncExternal(binaryPath, ['version'], {
     stdio: 'ignore',
     shell: false,
     timeout: 15000
@@ -1101,7 +1101,12 @@ const spawnedChildren = new Set();
 
 function spawnLogged(name, command, args, options = {}) {
   const { verbose = false, ...spawnOptions } = options;
-  const child = spawn(command, args, { ...spawnOptions, stdio: ['ignore', 'pipe', 'pipe'] });
+  const invocation = processInvocation(command, args);
+  const child = spawn(invocation.command, invocation.args, {
+    ...spawnOptions,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsVerbatimArguments: invocation.windowsVerbatimArguments
+  });
   const logLines = [];
   const record = (stream, chunk) => {
     const text = redactForLog(String(chunk));
@@ -1192,7 +1197,7 @@ function requestQuickTunnelViaCurl(proxyUrl) {
   const args = ['--silent', '--show-error', '--fail', '--max-time', '30'];
   if (proxyUrl) args.push('--proxy', proxyUrl);
   args.push('-X', 'POST', 'https://api.trycloudflare.com/tunnel');
-  const result = spawnSync('curl', args, {
+  const result = spawnSyncExternal(process.env.CODEXPRO_CURL_BIN || 'curl', args, {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     shell: false
@@ -1225,6 +1230,7 @@ function requestQuickTunnelViaCurl(proxyUrl) {
 function writeQuickTunnelCredentials(tunnel) {
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'codexpro-cloudflare-quick-'));
   const credentialsPath = path.join(tmpRoot, 'credentials.json');
+  fs.writeFileSync(path.join(tmpRoot, 'owner.json'), JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() }), { mode: 0o600 });
   fs.writeFileSync(credentialsPath, JSON.stringify({
     AccountTag: tunnel.accountTag,
     TunnelSecret: tunnel.secret,
@@ -1233,11 +1239,39 @@ function writeQuickTunnelCredentials(tunnel) {
   return { tmpRoot, credentialsPath };
 }
 
+function cleanupStaleQuickTunnelCredentials() {
+  const prefix = 'codexpro-cloudflare-quick-';
+  for (const entry of fs.readdirSync(os.tmpdir(), { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith(prefix)) continue;
+    const tmpRoot = path.join(os.tmpdir(), entry.name);
+    let remove = false;
+    try {
+      const owner = readJsonFile(path.join(tmpRoot, 'owner.json'));
+      if (Number.isInteger(owner?.pid) && owner.pid > 0) {
+        try { process.kill(owner.pid, 0); } catch { remove = true; }
+      } else {
+        remove = Date.now() - fs.statSync(tmpRoot).mtimeMs > 86_400_000;
+      }
+    } catch {
+      remove = Date.now() - fs.statSync(tmpRoot).mtimeMs > 86_400_000;
+    }
+    if (remove) fs.rmSync(tmpRoot, { recursive: true, force: true });
+  }
+}
+
 function killProcess(child) {
-  if (!child || child.killed) return;
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  if (process.platform === 'win32' && child.pid) {
+    spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'ignore', 'ignore'],
+      shell: false
+    });
+    return;
+  }
   try { child.kill('SIGTERM'); } catch {}
   setTimeout(() => {
-    if (!child.killed) {
+    if (child.exitCode === null && child.signalCode === null) {
       try { child.kill('SIGKILL'); } catch {}
     }
   }, 1500).unref();
@@ -1326,18 +1360,36 @@ function openUrl(url) {
   return result.status === 0;
 }
 
-function waitForProcessExit(child) {
-  return new Promise((resolve) => {
-    child.once('exit', (code, signal) => resolve({ code, signal }));
-  });
-}
-
 async function waitForPublicHealth(publicBase, token, tunnelChild, tunnelLabel = 'tunnel') {
   const health = waitForHealth(`${publicBase}/healthz`, token, 60000);
-  const exit = waitForProcessExit(tunnelChild).then(({ code, signal }) => {
-    throw new Error(`${tunnelLabel} exited before ${publicBase}/healthz was reachable, code=${code} signal=${signal}`);
+  let onExit;
+  let onError;
+  const exit = new Promise((_resolve, reject) => {
+    onExit = (code, signal) => {
+      reject(new Error(`${tunnelLabel} exited before ${publicBase}/healthz was reachable, code=${code} signal=${signal}`));
+    };
+    onError = (error) => {
+      reject(new Error(`${tunnelLabel} failed before ${publicBase}/healthz was reachable: ${error instanceof Error ? error.message : String(error)}`));
+    };
+    tunnelChild.once('exit', onExit);
+    tunnelChild.once('error', onError);
   });
-  return Promise.race([health, exit]);
+  try {
+    return await Promise.race([health, exit]);
+  } finally {
+    tunnelChild.off('exit', onExit);
+    tunnelChild.off('error', onError);
+  }
+}
+
+function refreshRuntimeConnection(root) {
+  try {
+    const filePath = runtimeStatusPathForRoot(root);
+    const runtime = readJsonFile(filePath);
+    if (runtime?.pid !== process.pid) return;
+    const now = new Date();
+    fs.utimesSync(filePath, now, now);
+  } catch {}
 }
 
 function isSubpath(child, parent) {
@@ -1465,6 +1517,17 @@ function splitCommandTemplate(input) {
   return tokens;
 }
 
+function coalesceExecutablePath(parts) {
+  if (parts.length < 2) return parts;
+  const first = expandHome(parts[0]);
+  if (!path.isAbsolute(first) && !path.win32.isAbsolute(first)) return parts;
+  for (let index = 1; index < parts.length; index += 1) {
+    const candidate = parts.slice(0, index + 1).join(' ');
+    if (executableFileExists(candidate)) return [candidate, ...parts.slice(index + 1)];
+  }
+  return parts;
+}
+
 function applyCommandTemplate(value, replacements) {
   return String(value).replace(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g, (_, key) => replacements[key] ?? '');
 }
@@ -1484,8 +1547,8 @@ function buildExecutorCommand(args, root, planPath, planText) {
     if (!/\{\{\s*(plan_file|plan_text)\s*\}\}/.test(template)) {
       throw new Error('Custom --command must include {{plan_file}} or {{plan_text}} so the agent receives the handoff.');
     }
-    const parts = splitCommandTemplate(template).map((part) => applyCommandTemplate(part, replacements));
-    const displayParts = splitCommandTemplate(template).map((part) => applyCommandTemplate(part, { ...replacements, plan_text: '<plan_text>' }));
+    const parts = coalesceExecutablePath(splitCommandTemplate(template).map((part) => applyCommandTemplate(part, replacements)));
+    const displayParts = coalesceExecutablePath(splitCommandTemplate(template).map((part) => applyCommandTemplate(part, { ...replacements, plan_text: '<plan_text>' })));
     if (!parts.length) throw new Error('Custom --command is empty.');
     return { agent, model, command: parts[0], args: parts.slice(1), displayArgs: displayParts.slice(1), custom: true };
   }
@@ -1567,6 +1630,9 @@ function quoteWindowsCmdArg(value) {
 }
 
 function processInvocation(command, args) {
+  if (/\.(?:cjs|mjs|js)$/i.test(command)) {
+    return { command: process.execPath, args: [command, ...args] };
+  }
   if (!isWindowsBatchFile(command)) return { command, args };
   const commandLine = ['call', quoteWindowsCmdArg(command), ...args.map(quoteWindowsCmdArg)].join(' ');
   return {
@@ -1574,6 +1640,14 @@ function processInvocation(command, args) {
     args: ['/d', '/s', '/c', commandLine],
     windowsVerbatimArguments: true
   };
+}
+
+function spawnSyncExternal(command, args, options) {
+  const invocation = processInvocation(command, args);
+  return spawnSync(invocation.command, invocation.args, {
+    ...options,
+    windowsVerbatimArguments: invocation.windowsVerbatimArguments
+  });
 }
 
 function runProcessCaptured(command, args, options) {
@@ -2077,8 +2151,8 @@ function loopArtifactPaths(root, contextDir) {
 }
 
 function buildTemplateCommand(template, replacements, displayReplacements, label) {
-  const parts = splitCommandTemplate(template).map((part) => applyCommandTemplate(part, replacements));
-  const displayParts = splitCommandTemplate(template).map((part) => applyCommandTemplate(part, displayReplacements ?? replacements));
+  const parts = coalesceExecutablePath(splitCommandTemplate(template).map((part) => applyCommandTemplate(part, replacements)));
+  const displayParts = coalesceExecutablePath(splitCommandTemplate(template).map((part) => applyCommandTemplate(part, displayReplacements ?? replacements)));
   if (!parts.length) throw new Error(`${label} command is empty.`);
   return {
     command: parts[0],
@@ -3631,7 +3705,17 @@ function writeControlPrompt() {
 }
 
 function runControlPanel(details, cleanup = cleanupChildren) {
-  if (!process.stdin.isTTY) return new Promise(() => {});
+  if (!process.stdin.isTTY) {
+    process.stdin.setEncoding('utf8');
+    process.stdin.resume();
+    process.stdin.on('data', (input) => {
+      if (String(input).trim().toLowerCase() !== 'q') return;
+      console.log('\nStopping CodexPro...');
+      cleanup();
+      process.exit(0);
+    });
+    return new Promise(() => {});
+  }
 
   writeControlPrompt();
 
@@ -3861,6 +3945,7 @@ async function main() {
     CODEXPRO_CONNECTION_TEST: connectionTest ? '1' : '0',
     CODEXPRO_MODE: mode,
     CODEXPRO_TUNNEL_MODE: tunnel === 'none' ? '0' : '1',
+    CODEXPRO_SUPERVISOR_PID: String(process.pid),
     CODEXPRO_ALLOW_NO_HTTP_TOKEN: args.noAuth ? '1' : '0'
   };
   if (codexDir) serverEnv.CODEXPRO_CODEX_DIR = codexDir;
@@ -3906,11 +3991,47 @@ async function main() {
   const server = spawnLogged('codexpro', process.execPath, [httpPath], { cwd: projectRoot, env: serverEnv, verbose: verboseLogs });
   let cloudflared;
   let cleanupTunnelCredentials = () => {};
+  let runtimeHeartbeat;
+  let shuttingDown = false;
   const cleanup = () => {
+    shuttingDown = true;
+    if (runtimeHeartbeat) clearInterval(runtimeHeartbeat);
     cleanupTunnelCredentials();
     cleanupChildren();
     clearRuntimeConnection(root);
   };
+  const failClosedOnServerExit = (code, signal) => {
+    if (shuttingDown) return;
+    console.error(`[codexpro] local MCP server exited unexpectedly (code=${code ?? 'null'} signal=${signal ?? 'none'}). Closing the tunnel.`);
+    cleanup();
+    process.exit(1);
+  };
+  const failClosedOnTunnelExit = (label) => {
+    const onError = (error) => {
+      if (shuttingDown) return;
+      console.error(`[codexpro] ${label} failed unexpectedly: ${error instanceof Error ? error.message : String(error)}. Closing the local MCP server.`);
+      cleanup();
+      process.exit(1);
+    };
+    const onExit = (code, signal) => {
+      if (shuttingDown) return;
+      console.error(`[codexpro] ${label} exited unexpectedly (code=${code ?? 'null'} signal=${signal ?? 'none'}). Closing the local MCP server.`);
+      cleanup();
+      process.exit(1);
+    };
+    cloudflared.once('error', onError);
+    cloudflared.once('exit', onExit);
+    if (cloudflared.exitCode !== null || cloudflared.signalCode !== null) {
+      onExit(cloudflared.exitCode, cloudflared.signalCode);
+    }
+  };
+  server.once('error', (error) => {
+    if (shuttingDown) return;
+    console.error(`[codexpro] local MCP server failed to start: ${error instanceof Error ? error.message : String(error)}`);
+    cleanup();
+    process.exit(1);
+  });
+  server.once('exit', failClosedOnServerExit);
   process.on('SIGINT', () => { cleanup(); process.exit(130); });
   process.on('SIGTERM', () => { cleanup(); process.exit(143); });
 
@@ -3930,6 +4051,12 @@ async function main() {
     requireBashSession,
     toolCards,
     connectionTest
+  };
+  const publishRuntimeConnection = (details) => {
+    saveRuntimeConnection(root, details, runtimeOptions);
+    if (runtimeHeartbeat) clearInterval(runtimeHeartbeat);
+    runtimeHeartbeat = setInterval(() => refreshRuntimeConnection(root), 500);
+    runtimeHeartbeat.unref();
   };
 
   if (tunnel === 'none') {
@@ -3952,7 +4079,7 @@ async function main() {
       requireBashSession,
       connectionTest
     });
-    saveRuntimeConnection(root, details, runtimeOptions);
+    publishRuntimeConnection(details);
     await runControlPanel(details, cleanup);
     return;
   }
@@ -3981,6 +4108,7 @@ async function main() {
       ].join('\n');
       throw new Error(`${error instanceof Error ? error.message : String(error)}${tail ? `\n\nRecent ngrok output:\n${tail}` : ''}${hint}`);
     }
+    failClosedOnTunnelExit('ngrok tunnel');
     const details = printConnectorBlock(`${publicBase}/mcp`, token, {
       localBase,
       copyUrl: args.noCopyUrl ? false : true,
@@ -3996,7 +4124,7 @@ async function main() {
       requireBashSession,
       connectionTest
     });
-    saveRuntimeConnection(root, details, runtimeOptions);
+    publishRuntimeConnection(details);
     await runControlPanel(details, cleanup);
     return;
   }
@@ -4026,6 +4154,7 @@ async function main() {
       ].join('\n');
       throw new Error(`${error instanceof Error ? error.message : String(error)}${tail ? `\n\nRecent tailscale output:\n${tail}` : ''}${hint}`);
     }
+    failClosedOnTunnelExit('Tailscale Funnel');
     const details = printConnectorBlock(`${publicBase}/mcp`, token, {
       localBase,
       copyUrl: args.noCopyUrl ? false : true,
@@ -4041,7 +4170,7 @@ async function main() {
       requireBashSession,
       connectionTest
     });
-    saveRuntimeConnection(root, details, runtimeOptions);
+    publishRuntimeConnection(details);
     await runControlPanel(details, cleanup);
     return;
   }
@@ -4066,12 +4195,13 @@ async function main() {
       requireBashSession,
       connectionTest
     });
-    saveRuntimeConnection(root, details, runtimeOptions);
+    publishRuntimeConnection(details);
     await runControlPanel(details, cleanup);
     return;
   }
 
   if (tunnel === 'cloudflare') {
+    cleanupStaleQuickTunnelCredentials();
     statusLine('wait', 'Opening Cloudflare quick tunnel');
     const proxyUrl = outboundProxyFromEnv(process.env);
     let publicBase = '';
@@ -4094,6 +4224,8 @@ async function main() {
       cloudflared = spawnLogged('cloudflared', cloudflaredPath, ['tunnel', '--url', localBase], { cwd: root, env: process.env, verbose: verboseLogs });
       publicBase = await waitForCloudflareUrl(cloudflared);
     }
+    await waitForPublicHealth(publicBase, token, cloudflared, 'Cloudflare quick tunnel');
+    failClosedOnTunnelExit('Cloudflare quick tunnel');
     const details = printConnectorBlock(`${publicBase}/mcp`, token, {
       localBase,
       copyUrl: args.noCopyUrl ? false : true,
@@ -4109,7 +4241,7 @@ async function main() {
       requireBashSession,
       connectionTest
     });
-    saveRuntimeConnection(root, details, runtimeOptions);
+    publishRuntimeConnection(details);
     await runControlPanel(details, cleanup);
     return;
   }
@@ -4163,6 +4295,7 @@ async function main() {
     ].join('\n');
     throw new Error(`${error instanceof Error ? error.message : String(error)}${tail ? `\n\nRecent cloudflared output:\n${tail}` : ''}${hint}`);
   }
+  failClosedOnTunnelExit('Cloudflare named tunnel');
   const details = printConnectorBlock(`${publicBase}/mcp`, token, {
     localBase,
     copyUrl: args.noCopyUrl ? false : true,
@@ -4178,7 +4311,7 @@ async function main() {
     requireBashSession,
     connectionTest
   });
-  saveRuntimeConnection(root, details, runtimeOptions);
+  publishRuntimeConnection(details);
   await runControlPanel(details, cleanup);
 }
 

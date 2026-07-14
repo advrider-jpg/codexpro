@@ -39,6 +39,7 @@ export interface WorkspaceProfile {
 export interface RuntimeConnection {
   version?: number;
   root?: string;
+  pid?: number;
   updatedAt?: string;
   endpoint?: string;
   localBase?: string;
@@ -136,5 +137,20 @@ export function readRuntimeConnection(root: string): RuntimeConnection {
   if (!runtime || typeof runtime !== "object" || Array.isArray(runtime)) return {};
   const typed = runtime as RuntimeConnection;
   if (typed.root && typed.root !== root) return {};
+  if (!Number.isInteger(typed.pid) || typed.pid! <= 0) {
+    fs.rmSync(runtimePath, { force: true });
+    return {};
+  }
+  const leaseExpired = Date.now() - fs.statSync(runtimePath).mtimeMs > 5_000;
+  try {
+    process.kill(typed.pid!, 0);
+  } catch {
+    fs.rmSync(runtimePath, { force: true });
+    return {};
+  }
+  if (leaseExpired) {
+    fs.rmSync(runtimePath, { force: true });
+    return {};
+  }
   return typed;
 }

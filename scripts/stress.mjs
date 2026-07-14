@@ -102,12 +102,14 @@ async function expectToolError(client, name, args, pattern) {
   return result;
 }
 
+const COLON_FIXTURE = process.platform === 'win32' ? 'visible-123-file.txt' : 'visible:123:file.txt';
+
 async function makeFixture() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'codexpro-stress-'));
   await fs.writeFile(path.join(root, 'AGENTS.md'), '# Stress Agents\n\nKeep checks local.\n', 'utf8');
   await fs.writeFile(path.join(root, 'demo.txt'), 'alpha\n--flag root\narrow -> value\n', 'utf8');
   await fs.writeFile(path.join(root, '.hidden.txt'), 'needle hidden\n', 'utf8');
-  await fs.writeFile(path.join(root, 'visible:123:file.txt'), 'needle colon path\n', 'utf8');
+  await fs.writeFile(path.join(root, COLON_FIXTURE), 'needle colon path\n', 'utf8');
   await fs.mkdir(path.join(root, '.github', 'workflows'), { recursive: true });
   await fs.writeFile(path.join(root, '.github', 'workflows', 'ci.yml'), 'name: ci\n', 'utf8');
   await fs.mkdir(path.join(root, 'many'), { recursive: true });
@@ -211,7 +213,7 @@ async function runFullModeStress(root) {
       name: 'search',
       arguments: { workspace_id: ws, query: 'needle colon path', max_results: 10 }
     });
-    assert(colonSearch.structuredContent.matches.some((match) => match.path === 'visible:123:file.txt' && match.line === 1), `colon path search parsed incorrectly: ${JSON.stringify(colonSearch.structuredContent.matches)}`);
+    assert(colonSearch.structuredContent.matches.some((match) => match.path === COLON_FIXTURE && match.line === 1), `search result path parsed incorrectly: ${JSON.stringify(colonSearch.structuredContent.matches)}`);
 
     const superRead = await client.request('tools/call', {
       name: 'codexpro',
@@ -456,7 +458,7 @@ async function runMcpInventoryStress() {
   await fs.writeFile(path.join(fakeHome, '.codex', 'config.toml'), toml, 'utf8');
   await fs.writeFile(path.join(fakeHome, '.cursor', 'mcp.json'), JSON.stringify({ mcpServers: cursorServers }), 'utf8');
 
-  const client = await initClient(root, { HOME: fakeHome });
+  const client = await initClient(root, { HOME: fakeHome, USERPROFILE: fakeHome });
   try {
     const opened = await client.request('tools/call', { name: 'open_current_workspace', arguments: { include_tree: false } });
     const inventory = await client.request('tools/call', {

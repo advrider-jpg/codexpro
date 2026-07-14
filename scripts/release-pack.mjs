@@ -1,7 +1,10 @@
 import { spawnSync } from "node:child_process";
+import { dirname, join } from "node:path";
 import { CODEXPRO_PACKAGE, assertCodexProReleaseEnvironment } from "./release-guard.mjs";
 
-const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+const npmCli = process.env.npm_execpath ?? join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
+const npmCommand = process.platform === "win32" ? process.execPath : "npm";
+const npmArgs = (args) => process.platform === "win32" ? [npmCli, ...args] : args;
 
 function fail(message) {
   throw new Error(message);
@@ -9,7 +12,7 @@ function fail(message) {
 
 try {
   const release = assertCodexProReleaseEnvironment();
-  const packed = spawnSync(npm, ["pack", "--dry-run", "--ignore-scripts", "--json"], {
+  const packed = spawnSync(npmCommand, npmArgs(["pack", "--dry-run", "--ignore-scripts", "--json"]), {
     cwd: release.root,
     encoding: "utf8",
     env: { ...process.env, INIT_CWD: release.root }

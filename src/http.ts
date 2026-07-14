@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { randomUUID } from "node:crypto";
 import { timingSafeEqual } from "node:crypto";
+import fs from "node:fs";
 import path from "node:path";
 import express, { type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
@@ -14,6 +15,7 @@ import {
   readWorkspaceProfile,
   sanitizeWorkspaceProfile,
   saveWorkspaceProfile,
+  runtimeStatusPathForRoot,
   type ConnectorMode,
   type TunnelMode,
   type WorkspaceProfile
@@ -1440,6 +1442,42 @@ async function main(): Promise<void> {
   }
 
   const config = loadConfig();
+  const supervisorPid = Number(process.env.CODEXPRO_SUPERVISOR_PID ?? 0);
+  if (Number.isInteger(supervisorPid) && supervisorPid > 0 && supervisorPid !== process.pid) {
+    const runtimePath = runtimeStatusPathForRoot(config.defaultRoot);
+    const shutdownOrphan = () => {
+      try {
+        const runtime = JSON.parse(fs.readFileSync(runtimePath, "utf8")) as { pid?: unknown };
+        if (runtime?.pid === supervisorPid) fs.rmSync(runtimePath, { force: true });
+      } catch {
+        // The runtime lease is absent, unreadable, or already owned by a newer launcher.
+      }
+      console.error(`[CodexPro] launcher process ${supervisorPid} is no longer running; shutting down orphaned HTTP MCP server.`);
+      clearInterval(supervisorTimer);
+      process.exit(1);
+    };
+    const supervisorTimer = setInterval(() => {
+      let processAlive = true;
+      try {
+        process.kill(supervisorPid, 0);
+      } catch {
+        processAlive = false;
+      }
+      let leaseExpired = false;
+      try {
+        const runtime = JSON.parse(fs.readFileSync(runtimePath, "utf8")) as { pid?: unknown };
+        if (runtime?.pid !== supervisorPid) {
+          leaseExpired = true;
+        } else {
+          leaseExpired = Date.now() - fs.statSync(runtimePath).mtimeMs > 5_000;
+        }
+      } catch {
+        // The launcher publishes the runtime lease only after its endpoint is ready.
+      }
+      if (!processAlive || leaseExpired) shutdownOrphan();
+    }, 250);
+    supervisorTimer.unref();
+  }
   if (config.requireHttpToken && !config.authToken) {
     throw new Error(
       "CODEXPRO_HTTP_TOKEN is required for this HTTP binding. " +
